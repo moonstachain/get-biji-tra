@@ -1,0 +1,4 @@
+interface:
+  display_name: "Get笔记逐字稿"
+  short_description: "用 Get笔记 导入链接或媒体并提取完整逐字稿与原文"
+  default_prompt: "Use Get笔记 web automation to log in if needed, import supported media or links, and extract full original transcripts into the current workspace artifacts. Be explicit when a link only yields a summary note rather than a transcript."
