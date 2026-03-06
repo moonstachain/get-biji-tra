@@ -7,14 +7,16 @@ description: Use when Codex needs to operate Get笔记 to import supported links
 
 Use the bundled script to drive Get笔记 Web with the persistent Chrome profile stored in this skill. The user may need to complete login or other authorization in the opened browser window.
 
+This skill now treats `视频链接 -> Get笔记 添加链接 -> original transcript` as the only end-to-end transcript path.
+
 ## Workflow Decision
 
 Choose the path that matches the user goal:
 
 - If the user needs `Get笔记` login or the session may have expired, run `probe` first and let the user complete login.
 - If the user wants a `链接总结` from a supported URL, run `submit-link`.
-- If the user wants a `完整逐字稿`, prefer `transcribe-link` for remote video URLs. It tries `Get笔记 直接导入链接` first, then falls back to `下载媒体 -> 导入音视频` only if the link note has no original transcript route.
 - If the user already has a remote `视频链接` and wants an end-to-end transcript in one step, run `transcribe-link`.
+- If the user wants a `完整逐字稿`, only use the link-based `transcribe-link` path for this skill.
 - If the user already has a Get笔记 `note id` and you need the original transcript, run `fetch-original`.
 
 ## Supported Reality
@@ -23,12 +25,10 @@ Treat these rules as hard constraints:
 
 - `submit-link` usually creates a structured summary note, not a guaranteed full transcript.
 - `fetch-original` only works for note types that expose `/note/:id/original`.
-- For video platforms such as `B站` or `小红书视频`, `transcribe-link` follows this priority:
+- For video platforms such as `B站` or `小红书视频`, `transcribe-link` follows one path only:
   1. submit the original link into `Get笔记`
   2. try to fetch an `original transcript` from that link-created note
-  3. if no original transcript exists, download media locally with `yt-dlp`
-  4. upload the media into `Get笔记`
-  5. fetch the original transcript from the media-created note
+- If the link-created note has no `original transcript`, stop and report that Get笔记 did not expose a transcript for that link.
 - For articles or image-text links such as `公众号` or `小红书图文`, Get笔记 can summarize imported content, but there is no audio transcript unless the source itself is media.
 
 ## Commands
@@ -44,23 +44,11 @@ python3 scripts/get_biji_transcript.py submit-link --link 'https://www.bilibili.
 ```
 
 ```bash
-python3 scripts/get_biji_transcript.py import-audio --file '/absolute/path/to/media.m4a' --timeout-seconds 300
+python3 scripts/get_biji_transcript.py transcribe-link --link 'https://www.bilibili.com/video/BV1DGAYzPELm/' --timeout-seconds 300
 ```
 
 ```bash
 python3 scripts/get_biji_transcript.py fetch-original --note-id 1903496783305829808
-```
-
-```bash
-python3 scripts/get_biji_transcript.py download-link --link 'https://www.bilibili.com/video/BV1DGAYzPELm/'
-```
-
-```bash
-python3 scripts/get_biji_transcript.py transcribe-file --file '/absolute/path/to/media.m4a' --timeout-seconds 300
-```
-
-```bash
-python3 scripts/get_biji_transcript.py transcribe-link --link 'https://www.bilibili.com/video/BV1DGAYzPELm/' --timeout-seconds 300
 ```
 
 ## Expected Outputs
@@ -69,7 +57,6 @@ Read the script output and return the important paths to the user:
 
 - transcript text: `artifacts/transcript-<note-id>-<timestamp>.txt`
 - structured transcript JSON: `artifacts/transcript-<note-id>-<timestamp>.json`
-- downloaded media: `artifacts/downloads/...`
 - page-state snapshots for debugging: screenshots, HTML, and element dumps in `artifacts/`
 
 When transcript extraction succeeds, report:
@@ -84,5 +71,4 @@ When transcript extraction succeeds, report:
 - Use `headless=True` flows unless login is required.
 - If the script reports `Get笔记 is not logged in`, switch to `probe` and let the user authorize.
 - If a link import succeeds but no original transcript route is available, say clearly that Get笔记 produced a summary note rather than a transcript.
-- If the user asks for a transcript from a remote video URL and no local media file exists yet, obtain or create the local media first, then use `transcribe-file`.
-- `transcribe-link` is the default remote-video entrypoint because it is `link-first`. Fall back to manual download plus `transcribe-file` only when both Get link import and automated download are blocked.
+- Do not auto-fallback to local download or media upload in this skill. The transcript path is link-only.

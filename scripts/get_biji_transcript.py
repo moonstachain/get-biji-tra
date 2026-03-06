@@ -555,7 +555,6 @@ def run_transcribe_link(
     timeout_seconds: int,
     download_dir: Optional[Path] = None,
 ) -> int:
-    link_result = None
     try:
         with sync_playwright() as playwright:
             context = launch_context(playwright, headless=True)
@@ -612,43 +611,36 @@ def run_transcribe_link(
                 print(f"Saved transcript JSON: {transcript_json}")
                 print(f"Saved transcript TXT: {transcript_txt}")
                 return 0
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            result_json = output_dir / f"transcribe-link-result-{timestamp}.json"
+            result_json.write_text(
+                json.dumps(
+                    {
+                        "path_used": "get-link-only",
+                        "success": False,
+                        "reason": "link_note_has_no_original_transcript",
+                        "input_link": link,
+                        "note_title": link_result["note_title"],
+                        "note_id": link_result["note_id"],
+                        "note_url": link_result["note_url"],
+                        "captured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            dump_page_state(page, output_dir, f"transcribe-link-no-original-{link_result['note_id']}")
             context.close()
-
-        media_path, download_info = download_media_from_link(output_dir=output_dir, link=link, download_dir=download_dir)
-        result = transcribe_media_file(output_dir=output_dir, media_path=media_path, timeout_seconds=timeout_seconds)
+            print(
+                f"Get笔记 link import did not expose an original transcript for note {link_result['note_id']}.",
+                file=sys.stderr,
+            )
+            print(f"Saved workflow JSON: {result_json}", file=sys.stderr)
+            return 1
     except Exception as exc:
         print(str(exc), file=sys.stderr)
         return 1
-
-    summary_path = write_json_file(
-        output_dir,
-        {
-            "path_used": "download-import-original",
-            "input_link": link,
-            "link_result": link_result,
-            "downloaded_file": str(media_path),
-            "download_metadata_path": download_info["metadata_path"],
-            "note_title": result["note_title"],
-            "note_id": result["note_id"],
-            "note_url": result["note_url"],
-            "sentence_count": result["sentence_count"],
-            "result_json": result["result_json"],
-            "transcript_json": result["transcript_json"],
-            "transcript_txt": result["transcript_txt"],
-            "captured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        },
-        "transcribe-link-result",
-    )
-    print("Path used: download-import-original")
-    print(f"Get note from link: {link_result['note_id'] if link_result else ''}")
-    print(f"Downloaded file: {media_path}")
-    print(f"Title: {result['note_title']}")
-    print(f"Note ID: {result['note_id']}")
-    print(f"Sentence count: {result['sentence_count']}")
-    print(f"Saved workflow JSON: {summary_path}")
-    print(f"Saved transcript JSON: {result['transcript_json']}")
-    print(f"Saved transcript TXT: {result['transcript_txt']}")
-    return 0
 
 
 def main() -> int:
